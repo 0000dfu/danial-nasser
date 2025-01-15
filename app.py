@@ -46,7 +46,7 @@ def interact_with_short_video(platform, video_url, actions_count):
             try:
                 print(f"✅ محاكاة التفاعل مع الفيديو على TikTok ({i + 1}/{actions_count})")
                 # إضافة منطق التفاعل مع TikTok مثل الإعجاب أو التعليق
-                time.sleep(2)  # الانتظار بين التفاعلات
+                time.sleep(8)  # الانتظار لمدة 8 ثواني لمحاكاة مدة مشاهدة الفيديو
             except Exception as e:
                 print(f"❌ خطأ أثناء التفاعل مع الفيديو: {e}")
     elif platform == "instagram_reels":
@@ -55,9 +55,10 @@ def interact_with_short_video(platform, video_url, actions_count):
             try:
                 print(f"✅ محاكاة التفاعل مع الفيديو على Instagram Reels ({i + 1}/{actions_count})")
                 # إضافة منطق التفاعل مع Reels مثل الإعجاب أو التعليق
-                time.sleep(2)  # الانتظار بين التفاعلات
+                time.sleep(8)  # الانتظار لمدة 8 ثواني لمحاكاة مدة مشاهدة الفيديو
             except Exception as e:
                 print(f"❌ خطأ أثناء التفاعل مع الفيديو: {e}")
+
 
 @app.route(f"/{API_TOKEN}", methods=["POST"])
 def webhook():

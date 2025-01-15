@@ -1,7 +1,8 @@
 import os
 import requests
-from flask import Flask, request, send_file
-from gtts import gTTS
+import pyttsx3
+from flask import Flask, request, jsonify
+from tempfile import NamedTemporaryFile
 
 # إعداد القيم من متغيرات البيئة
 API_TOKEN = os.getenv("API_TOKEN")  # توكن البوت
@@ -13,6 +14,23 @@ if not API_TOKEN or not WEBHOOK_URL:
 
 app = Flask(__name__)
 
+# إعداد الأصوات واللغات
+LANGUAGES = {
+    "ar": "العربية",
+    "en": "English",
+    "fr": "Français",
+    "es": "Español",
+}
+
+VOICES = {
+    "male": "رجل",
+    "female": "امرأة",
+}
+
+DEFAULT_LANGUAGE = "ar"
+DEFAULT_VOICE = "male"
+
+
 def set_webhook():
     """إعداد Webhook للبوت."""
     url = f"https://api.telegram.org/bot{API_TOKEN}/setWebhook"
@@ -23,26 +41,48 @@ def set_webhook():
         print(f"✅ Webhook تم إعداده بنجاح: {WEBHOOK_URL}/{API_TOKEN}")
     except requests.exceptions.RequestException as e:
         print(f"❌ خطأ في إعداد Webhook: {e}")
+        raise
+
 
 def send_message(chat_id, text):
     """إرسال رسالة نصية إلى المستخدم."""
     url = f"https://api.telegram.org/bot{API_TOKEN}/sendMessage"
-    payload = {"chat_id": chat_id, "text": text}
+    payload = {"chat_id": chat_id, "text": text, "parse_mode": "Markdown"}
     try:
-        requests.post(url, json=payload)
+        response = requests.post(url, json=payload)
+        response.raise_for_status()
     except requests.exceptions.RequestException as e:
         print(f"❌ خطأ أثناء إرسال الرسالة: {e}")
 
-def send_audio(chat_id, audio_path):
+
+def send_audio(chat_id, audio_file):
     """إرسال ملف صوتي إلى المستخدم."""
     url = f"https://api.telegram.org/bot{API_TOKEN}/sendAudio"
-    with open(audio_path, "rb") as audio_file:
-        payload = {"chat_id": chat_id}
-        files = {"audio": audio_file}
-        try:
-            requests.post(url, data=payload, files=files)
-        except requests.exceptions.RequestException as e:
-            print(f"❌ خطأ أثناء إرسال الملف الصوتي: {e}")
+    try:
+        with open(audio_file.name, "rb") as f:
+            response = requests.post(url, data={"chat_id": chat_id}, files={"audio": f})
+            response.raise_for_status()
+    except requests.exceptions.RequestException as e:
+        print(f"❌ خطأ أثناء إرسال الملف الصوتي: {e}")
+
+
+def synthesize_speech(text, lang=DEFAULT_LANGUAGE, voice=DEFAULT_VOICE):
+    """تحويل النص إلى صوت باستخدام pyttsx3."""
+    engine = pyttsx3.init()
+    voices = engine.getProperty("voices")
+
+    # اختيار الصوت
+    for v in voices:
+        if (voice == "male" and "male" in v.name.lower()) or (voice == "female" and "female" in v.name.lower()):
+            engine.setProperty("voice", v.id)
+            break
+
+    engine.setProperty("rate", 150)  # سرعة القراءة
+    with NamedTemporaryFile(delete=False, suffix=".mp3") as temp_audio:
+        engine.save_to_file(text, temp_audio.name)
+        engine.runAndWait()
+        return temp_audio
+
 
 @app.route(f"/{API_TOKEN}", methods=["POST"])
 def webhook():
@@ -50,26 +90,66 @@ def webhook():
     data = request.get_json()
 
     if not data or "message" not in data:
-        return "No message data", 400
+        return jsonify({"error": "No message data"}), 400
 
-    chat_id = data["message"]["chat"]["id"]
-    text = data["message"].get("text", "").strip()
+    message = data["message"]
+    chat_id = message["chat"]["id"]
+    text = message.get("text", "").strip()
 
+    # بدء الاستخدام
     if text.lower() == "/start":
-        send_message(chat_id, "مرحبًا! أرسل لي أي نص لتحويله إلى صوت.")
-    elif text:
-        try:
-            tts = gTTS(text, lang="ar")
-            audio_path = f"{chat_id}_audio.mp3"
-            tts.save(audio_path)
-            send_audio(chat_id, audio_path)
-            os.remove(audio_path)
-        except Exception as e:
-            send_message(chat_id, f"❌ خطأ أثناء تحويل النص إلى صوت: {e}")
-    else:
-        send_message(chat_id, "❌ الرجاء إرسال نص صحيح.")
+        send_message(
+            chat_id,
+            "✨ *مرحبًا بك في بوت تحويل النص إلى صوت!*\n\n"
+            "💬 أرسل النص الذي ترغب في تحويله إلى صوت.\n\n"
+            "🌐 *اللغات المدعومة:*\n" +
+            "\n".join([f"- `{key}`: {value}" for key, value in LANGUAGES.items()]) +
+            "\n\n🎙️ *الأصوات المدعومة:*\n" +
+            "\n".join([f"- `{key}`: {value}" for key, value in VOICES.items()]) +
+            "\n\n🛠️ *الأوامر المتاحة:*\n"
+            "`/lang [رمز اللغة]` - لتغيير اللغة.\n"
+            "`/voice [male/female]` - لتغيير الصوت.\n"
+        )
+        return jsonify({"status": "ok"}), 200
 
-    return "OK", 200
+    # تعيين اللغة
+    elif text.startswith("/lang"):
+        try:
+            _, lang = text.split(maxsplit=1)
+            if lang not in LANGUAGES:
+                raise ValueError("❌ اللغة غير مدعومة.")
+            app.config[f"user_lang_{chat_id}"] = lang
+            send_message(chat_id, f"✅ تم تعيين اللغة إلى: {LANGUAGES[lang]}.")
+        except ValueError as e:
+            send_message(chat_id, str(e))
+        return jsonify({"status": "ok"}), 200
+
+    # تعيين الصوت
+    elif text.startswith("/voice"):
+        try:
+            _, voice = text.split(maxsplit=1)
+            if voice not in VOICES:
+                raise ValueError("❌ الصوت غير مدعوم.")
+            app.config[f"user_voice_{chat_id}"] = voice
+            send_message(chat_id, f"✅ تم تعيين الصوت إلى: {VOICES[voice]}.")
+        except ValueError as e:
+            send_message(chat_id, str(e))
+        return jsonify({"status": "ok"}), 200
+
+    # تحويل النص إلى صوت
+    elif text:
+        lang = app.config.get(f"user_lang_{chat_id}", DEFAULT_LANGUAGE)
+        voice = app.config.get(f"user_voice_{chat_id}", DEFAULT_VOICE)
+        try:
+            temp_audio = synthesize_speech(text, lang, voice)
+            send_audio(chat_id, temp_audio)
+        except Exception as e:
+            send_message(chat_id, f"❌ حدث خطأ أثناء تحويل النص إلى صوت: {e}")
+        return jsonify({"status": "ok"}), 200
+
+    send_message(chat_id, "❌ الرجاء إرسال نص صحيح.")
+    return jsonify({"status": "ok"}), 200
+
 
 if __name__ == "__main__":
     print(f"✅ تشغيل التطبيق على المنفذ {PORT}...")

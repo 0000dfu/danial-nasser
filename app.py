@@ -14,7 +14,7 @@ if not API_TOKEN or not WEBHOOK_URL:
 
 app = Flask(__name__)
 
-# إعداد الأصوات واللغات
+# إعداد اللغات والأصوات وسرعة الصوت
 LANGUAGES = {
     "ar": "العربية",
     "en": "English",
@@ -29,7 +29,7 @@ VOICES = {
 
 DEFAULT_LANGUAGE = "ar"
 DEFAULT_VOICE = "male"
-
+DEFAULT_SPEED = 150  # السرعة الافتراضية
 
 def set_webhook():
     """إعداد Webhook للبوت."""
@@ -43,7 +43,6 @@ def set_webhook():
         print(f"❌ خطأ في إعداد Webhook: {e}")
         raise
 
-
 def send_message(chat_id, text):
     """إرسال رسالة نصية إلى المستخدم."""
     url = f"https://api.telegram.org/bot{API_TOKEN}/sendMessage"
@@ -53,7 +52,6 @@ def send_message(chat_id, text):
         response.raise_for_status()
     except requests.exceptions.RequestException as e:
         print(f"❌ خطأ أثناء إرسال الرسالة: {e}")
-
 
 def send_audio(chat_id, audio_file):
     """إرسال ملف صوتي إلى المستخدم."""
@@ -65,8 +63,7 @@ def send_audio(chat_id, audio_file):
     except requests.exceptions.RequestException as e:
         print(f"❌ خطأ أثناء إرسال الملف الصوتي: {e}")
 
-
-def synthesize_speech(text, lang=DEFAULT_LANGUAGE, voice=DEFAULT_VOICE):
+def synthesize_speech(text, lang=DEFAULT_LANGUAGE, voice=DEFAULT_VOICE, speed=DEFAULT_SPEED):
     """تحويل النص إلى صوت باستخدام pyttsx3."""
     engine = pyttsx3.init()
     voices = engine.getProperty("voices")
@@ -77,12 +74,13 @@ def synthesize_speech(text, lang=DEFAULT_LANGUAGE, voice=DEFAULT_VOICE):
             engine.setProperty("voice", v.id)
             break
 
-    engine.setProperty("rate", 150)  # سرعة القراءة
+    # تعيين سرعة الصوت
+    engine.setProperty("rate", speed)
+
     with NamedTemporaryFile(delete=False, suffix=".mp3") as temp_audio:
         engine.save_to_file(text, temp_audio.name)
         engine.runAndWait()
         return temp_audio
-
 
 @app.route(f"/{API_TOKEN}", methods=["POST"])
 def webhook():
@@ -96,7 +94,6 @@ def webhook():
     chat_id = message["chat"]["id"]
     text = message.get("text", "").strip()
 
-    # بدء الاستخدام
     if text.lower() == "/start":
         send_message(
             chat_id,
@@ -106,13 +103,13 @@ def webhook():
             "\n".join([f"- `{key}`: {value}" for key, value in LANGUAGES.items()]) +
             "\n\n🎙️ *الأصوات المدعومة:*\n" +
             "\n".join([f"- `{key}`: {value}" for key, value in VOICES.items()]) +
-            "\n\n🛠️ *الأوامر المتاحة:*\n"
+            "\n\n⚙️ *أوامر التحكم:*\n"
             "`/lang [رمز اللغة]` - لتغيير اللغة.\n"
             "`/voice [male/female]` - لتغيير الصوت.\n"
+            "`/speed [عدد]` - لتغيير سرعة الصوت (مثل 100-200).\n"
         )
         return jsonify({"status": "ok"}), 200
 
-    # تعيين اللغة
     elif text.startswith("/lang"):
         try:
             _, lang = text.split(maxsplit=1)
@@ -124,7 +121,6 @@ def webhook():
             send_message(chat_id, str(e))
         return jsonify({"status": "ok"}), 200
 
-    # تعيين الصوت
     elif text.startswith("/voice"):
         try:
             _, voice = text.split(maxsplit=1)
@@ -136,12 +132,24 @@ def webhook():
             send_message(chat_id, str(e))
         return jsonify({"status": "ok"}), 200
 
-    # تحويل النص إلى صوت
+    elif text.startswith("/speed"):
+        try:
+            _, speed = text.split(maxsplit=1)
+            speed = int(speed)
+            if speed < 50 or speed > 300:
+                raise ValueError("❌ السرعة يجب أن تكون بين 50 و 300.")
+            app.config[f"user_speed_{chat_id}"] = speed
+            send_message(chat_id, f"✅ تم تعيين سرعة الصوت إلى: {speed}.")
+        except ValueError as e:
+            send_message(chat_id, str(e))
+        return jsonify({"status": "ok"}), 200
+
     elif text:
         lang = app.config.get(f"user_lang_{chat_id}", DEFAULT_LANGUAGE)
         voice = app.config.get(f"user_voice_{chat_id}", DEFAULT_VOICE)
+        speed = app.config.get(f"user_speed_{chat_id}", DEFAULT_SPEED)
         try:
-            temp_audio = synthesize_speech(text, lang, voice)
+            temp_audio = synthesize_speech(text, lang, voice, speed)
             send_audio(chat_id, temp_audio)
         except Exception as e:
             send_message(chat_id, f"❌ حدث خطأ أثناء تحويل النص إلى صوت: {e}")
@@ -149,7 +157,6 @@ def webhook():
 
     send_message(chat_id, "❌ الرجاء إرسال نص صحيح.")
     return jsonify({"status": "ok"}), 200
-
 
 if __name__ == "__main__":
     print(f"✅ تشغيل التطبيق على المنفذ {PORT}...")

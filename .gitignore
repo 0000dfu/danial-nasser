@@ -1,8 +1,5 @@
 __pycache__/
-.vscode/
-cookies_view_*.txt
-pip-log.txt
-.env
 *.pyc
-*.pyo
+cookies_view_*.txt
+.env
 *.log

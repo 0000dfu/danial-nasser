@@ -9,8 +9,8 @@ from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 
 # تعيين القيم من متغيرات البيئة
-API_TOKEN = os.getenv("API_TOKEN")  # يجب وضع توكن البوت في متغير البيئة
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # رابط الويب هوك العام (HTTPS مطلوب)
+API_TOKEN = os.getenv("API_TOKEN")  # توكن البوت من متغير البيئة
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # رابط الويب هوك (HTTPS مطلوب)
 PORT = int(os.getenv("PORT", 5000))  # المنفذ الافتراضي 5000
 
 # التأكد من وجود API_TOKEN و WEBHOOK_URL
@@ -46,12 +46,16 @@ def send_message(chat_id, text):
 def interact_with_video_selenium(video_url, actions_count):
     """محاكاة التفاعل باستخدام Selenium."""
     try:
-        # إعداد متصفح Chrome
+        # إعداد الخيارات لتشغيل Chrome في بيئة خادم
         chrome_options = Options()
-        chrome_options.add_argument("--headless")  # تشغيل في الخلفية
-        chrome_options.add_argument("--no-sandbox")
-        chrome_options.add_argument("--disable-dev-shm-usage")
-        driver = webdriver.Chrome(service=Service("/path/to/chromedriver"), options=chrome_options)
+        chrome_options.add_argument("--headless")  # تشغيل بدون واجهة رسومية
+        chrome_options.add_argument("--no-sandbox")  # مطلوب في البيئات السحابية
+        chrome_options.add_argument("--disable-dev-shm-usage")  # تقليل استهلاك الذاكرة
+        chrome_options.add_argument("--disable-gpu")  # تعطيل تسريع الرسومات
+        chrome_options.add_argument("--window-size=1920,1080")  # حجم النافذة الافتراضية
+
+        # تحديد مسار ChromeDriver
+        driver = webdriver.Chrome(service=Service("/usr/bin/chromedriver"), options=chrome_options)
 
         # فتح رابط الفيديو
         driver.get(video_url)
@@ -62,7 +66,7 @@ def interact_with_video_selenium(video_url, actions_count):
             time.sleep(10)  # وقت المشاهدة لكل فيديو
             print(f"✅ مشاهدة الفيديو ({i + 1}/{actions_count}) لمدة 10 ثوانٍ.")
         
-        driver.quit()
+        driver.quit()  # إغلاق المتصفح
         print("✅ تم الانتهاء من التفاعل.")
     except Exception as e:
         print(f"❌ خطأ أثناء التفاعل: {e}")

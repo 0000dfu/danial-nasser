@@ -1,116 +1,145 @@
+# path: webhook_service.py
+
 import os
+import re
+import time
 import requests
-from gtts import gTTS
-from flask import Flask, request, jsonify
-from tempfile import NamedTemporaryFile
+from flask import Flask, request
+from threading import Thread
+from random import uniform, choice
+import http.cookiejar as cookiejar
 
-# إعداد القيم من متغيرات البيئة
-API_TOKEN = os.getenv("API_TOKEN")  # توكن البوت
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # رابط الويب هوك
-PORT = int(os.getenv("PORT", 5000))  # المنفذ الافتراضي
+# قائمة الـ User-Agent لمحاكاة التصفح
+USER_AGENTS = [
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.5735.199 Safari/537.36",
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/112.0.5735.110 Safari/537.36",
+    "Mozilla/5.0 (Linux; Android 10; SM-A205U) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.5043.102 Mobile Safari/537.36",
+]
 
+# استرداد المتغيرات البيئية
+API_TOKEN = os.getenv("API_TOKEN")
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")
+PORT = int(os.getenv("PORT", 5000))
+
+# تحقق من صحة الإعدادات
 if not API_TOKEN or not WEBHOOK_URL:
-    raise ValueError("يجب تحديد API_TOKEN و WEBHOOK_URL في متغيرات البيئة.")
+    raise ValueError("API_TOKEN and WEBHOOK_URL must be set as environment variables.")
 
+# إنشاء تطبيق Flask
 app = Flask(__name__)
 
-# إعداد اللغات
-LANGUAGES = {
-    "ar": "العربية",
-    "en": "English",
-    "fr": "Français",
-    "es": "Español",
-}
-
-DEFAULT_LANGUAGE = "ar"
-
 def set_webhook():
-    """إعداد Webhook للبوت."""
+    """إعداد ويب هوك الخاص بتليجرام."""
     url = f"https://api.telegram.org/bot{API_TOKEN}/setWebhook"
     payload = {"url": f"{WEBHOOK_URL}/{API_TOKEN}"}
     try:
         response = requests.post(url, json=payload)
         response.raise_for_status()
-        print(f"✅ Webhook تم إعداده بنجاح: {WEBHOOK_URL}/{API_TOKEN}")
+        print(f"✅ Webhook successfully set: {WEBHOOK_URL}/{API_TOKEN}")
     except requests.exceptions.RequestException as e:
-        print(f"❌ خطأ في إعداد Webhook: {e}")
-        raise
+        print(f"❌ Error setting webhook: {e}")
 
 def send_message(chat_id, text):
-    """إرسال رسالة نصية إلى المستخدم."""
+    """إرسال رسالة للمستخدم عبر تليجرام."""
     url = f"https://api.telegram.org/bot{API_TOKEN}/sendMessage"
     payload = {"chat_id": chat_id, "text": text, "parse_mode": "Markdown"}
     try:
         response = requests.post(url, json=payload)
         response.raise_for_status()
     except requests.exceptions.RequestException as e:
-        print(f"❌ خطأ أثناء إرسال الرسالة: {e}")
+        print(f"❌ Error sending message: {e}")
 
-def send_audio(chat_id, audio_file):
-    """إرسال ملف صوتي إلى المستخدم."""
-    url = f"https://api.telegram.org/bot{API_TOKEN}/sendAudio"
+def save_cookies_per_view(url, view_id):
+    """حفظ الكوكيز لكل مشاهدة بشكل مستقل."""
+    cookie_file = f"cookies_view_{view_id}.txt"
+    session = requests.Session()
+    session.cookies = cookiejar.LWPCookieJar(cookie_file)
     try:
-        with open(audio_file.name, "rb") as f:
-            response = requests.post(url, data={"chat_id": chat_id}, files={"audio": f})
-            response.raise_for_status()
-    except requests.exceptions.RequestException as e:
-        print(f"❌ خطأ أثناء إرسال الملف الصوتي: {e}")
+        session.get(url)
+        session.cookies.save(ignore_discard=True)
+        print(f"✅ Cookies saved for view {view_id} in {cookie_file}")
+        return cookie_file
+    except Exception as e:
+        print(f"❌ Failed to save cookies for view {view_id}: {e}")
+        return None
 
-def synthesize_speech(text, lang=DEFAULT_LANGUAGE):
-    """تحويل النص إلى صوت باستخدام gTTS."""
-    tts = gTTS(text=text, lang=lang)
-    with NamedTemporaryFile(delete=False, suffix=".mp3") as temp_audio:
-        tts.save(temp_audio.name)
-        return temp_audio
+def load_cookies(cookie_file):
+    """تحميل الكوكيز من ملف."""
+    jar = cookiejar.LWPCookieJar()
+    try:
+        jar.load(cookie_file, ignore_discard=True)
+        print(f"✅ Cookies loaded from {cookie_file}")
+    except Exception as e:
+        print(f"❌ Failed to load cookies from {cookie_file}: {e}")
+    return jar
+
+def simulate_interaction(video_url, headers, cookies):
+    """محاكاة طلب إلى YouTube باستخدام الكوكيز."""
+    try:
+        response = requests.get(video_url, headers=headers, cookies=cookies, timeout=10)
+        if response.status_code == 200:
+            print(f"✅ Interaction successful for: {video_url}")
+            return True
+        else:
+            print(f"❌ Failed interaction. Status code: {response.status_code}")
+            return False
+    except requests.exceptions.RequestException as e:
+        print(f"❌ Error during interaction: {e}")
+        return False
+
+def increase_views(video_url, views_count, chat_id):
+    """محاكاة زيادة المشاهدات باستخدام كوكيز لكل مشاهدة."""
+    for i in range(views_count):
+        view_id = i + 1
+        headers = {"User-Agent": choice(USER_AGENTS)}
+        cookie_file = save_cookies_per_view("https://www.youtube.com", view_id)
+        if not cookie_file:
+            send_message(chat_id, f"❌ Failed to create cookies for view {view_id}.")
+            continue
+        cookies = load_cookies(cookie_file)
+        success = simulate_interaction(video_url, headers, cookies)
+        if success:
+            send_message(chat_id, f"✅ View {view_id}/{views_count} simulated successfully! 🎥")
+        else:
+            send_message(chat_id, f"❌ Failed to simulate view {view_id}.")
+        time.sleep(uniform(5, 10))  # تأخير عشوائي بين الطلبات
 
 @app.route(f"/{API_TOKEN}", methods=["POST"])
 def webhook():
-    """التعامل مع الرسائل الواردة من Telegram."""
+    """معالجة طلبات تليجرام."""
     data = request.get_json()
-
     if not data or "message" not in data:
-        return jsonify({"error": "No message data"}), 400
+        return "Invalid data", 400
 
-    message = data["message"]
-    chat_id = message["chat"]["id"]
-    text = message.get("text", "").strip()
+    chat_id = data["message"]["chat"]["id"]
+    text = data["message"].get("text", "").strip()
 
-    if text.lower() == "/start":
-        send_message(
-            chat_id,
-            "✨ *مرحبًا بك في بوت تحويل النص إلى صوت!*\n\n"
-            "💬 أرسل النص الذي ترغب في تحويله إلى صوت.\n\n"
-            "🌐 *اللغات المدعومة:*\n" +
-            "\n".join([f"- `{key}`: {value}" for key, value in LANGUAGES.items()]) +
-            "\n\n⚙️ *أوامر التحكم:*\n"
-            "`/lang [رمز اللغة]` - لتغيير اللغة.\n"
+    if text.startswith("/start"):
+        welcome_message = (
+            "👋 *Welcome!*\n\n"
+            "To simulate views on a video, send the video URL and desired view count in the format:\n"
+            "`<video_url> <view_count>`\n\n"
+            "📌 Example:\n`https://www.youtube.com/watch?v=example 100`"
         )
-        return jsonify({"status": "ok"}), 200
-
-    elif text.startswith("/lang"):
+        send_message(chat_id, welcome_message)
+    elif re.match(r"(https?://)?(www\.)?(youtube\.com/watch\?v=|youtu\.be/)[\w-]+", text):
         try:
-            _, lang = text.split(maxsplit=1)
-            if lang not in LANGUAGES:
-                raise ValueError("❌ اللغة غير مدعومة.")
-            app.config[f"user_lang_{chat_id}"] = lang
-            send_message(chat_id, f"✅ تم تعيين اللغة إلى: {LANGUAGES[lang]}.")
-        except ValueError as e:
-            send_message(chat_id, str(e))
-        return jsonify({"status": "ok"}), 200
-
-    elif text:
-        lang = app.config.get(f"user_lang_{chat_id}", DEFAULT_LANGUAGE)
-        try:
-            temp_audio = synthesize_speech(text, lang)
-            send_audio(chat_id, temp_audio)
+            video_url, views_count = text.rsplit(maxsplit=1)
+            views_count = int(views_count)
+            if views_count <= 0:
+                raise ValueError("Views count must be positive.")
+            send_message(chat_id, f"✅ Starting simulation for {views_count} views.")
+            Thread(target=increase_views, args=(video_url, views_count, chat_id)).start()
+        except ValueError as ve:
+            send_message(chat_id, f"❌ Invalid input: {ve}")
         except Exception as e:
-            send_message(chat_id, f"❌ حدث خطأ أثناء تحويل النص إلى صوت: {e}")
-        return jsonify({"status": "ok"}), 200
+            send_message(chat_id, f"❌ An unexpected error occurred: {e}")
+    else:
+        send_message(chat_id, "❌ Invalid URL or format. Please send the video URL and view count.")
 
-    send_message(chat_id, "❌ الرجاء إرسال نص صحيح.")
-    return jsonify({"status": "ok"}), 200
+    return "OK", 200
 
 if __name__ == "__main__":
-    print(f"✅ تشغيل التطبيق على المنفذ {PORT}...")
+    print(f"Starting app on port {PORT}...")
     set_webhook()
     app.run(host="0.0.0.0", port=PORT)

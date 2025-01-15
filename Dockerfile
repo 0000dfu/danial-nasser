@@ -1,36 +1,35 @@
-# استخدم صورة Python الأساسية
-FROM python:3.10-slim
+FROM python:3.9-slim
 
-# تثبيت الحزم الأساسية
+# تثبيت المتطلبات الأساسية
 RUN apt-get update && apt-get install -y \
     wget \
     unzip \
-    curl \
-    gnupg \
-    && apt-get clean
-
-# إضافة مفتاح Google Chrome الرسمي
-RUN wget -q -O - https://dl.google.com/linux/linux_signing_key.pub | apt-key add - \
-    && echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
+    xvfb \
+    libxi6 \
+    libgconf-2-4 \
+    default-jdk \
+    libnss3 \
+    libasound2 \
+    fonts-liberation \
+    libappindicator3-1 \
+    xdg-utils \
+    && rm -rf /var/lib/apt/lists/*
 
 # تثبيت Google Chrome
+RUN wget -q -O - https://dl-ssl.google.com/linux/linux_signing_key.pub | apt-key add -
+RUN echo "deb [arch=amd64] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
 RUN apt-get update && apt-get install -y google-chrome-stable
 
-# تنزيل وتثبيت Chromedriver
-RUN CHROMEDRIVER_VERSION=$(curl -sS https://chromedriver.storage.googleapis.com/LATEST_RELEASE) && \
-    wget -O /tmp/chromedriver.zip https://chromedriver.storage.googleapis.com/${CHROMEDRIVER_VERSION}/chromedriver_linux64.zip && \
-    unzip /tmp/chromedriver.zip -d /usr/bin/ && \
-    chmod +x /usr/bin/chromedriver && \
-    rm /tmp/chromedriver.zip
+# تثبيت Chromedriver
+RUN wget -O /tmp/chromedriver.zip https://chromedriver.storage.googleapis.com/114.0.5735.90/chromedriver_linux64.zip \
+    && unzip /tmp/chromedriver.zip -d /usr/bin/ \
+    && rm /tmp/chromedriver.zip
 
-# تعيين PATH الافتراضي لـ Chrome وChromedriver
-ENV PATH="/usr/bin/google-chrome:/usr/bin/chromedriver:$PATH"
-
-# نسخ ملفات المشروع
+# نسخ الملفات
 WORKDIR /app
 COPY . /app
 
-# تثبيت متطلبات المشروع
+# تثبيت مكتبات Python
 RUN pip install --no-cache-dir -r requirements.txt
 
 # تشغيل التطبيق

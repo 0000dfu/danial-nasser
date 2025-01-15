@@ -53,7 +53,7 @@ def save_cookies_per_view(url, view_id):
     session = requests.Session()
     session.cookies = cookiejar.LWPCookieJar(cookie_file)
     try:
-        session.get(url)
+        session.get(url, timeout=10)
         session.cookies.save(ignore_discard=True)
         print(f"✅ Cookies saved for view {view_id} in {cookie_file}")
         return cookie_file
@@ -77,8 +77,7 @@ def simulate_interaction(video_url, headers, cookies):
         response = requests.get(video_url, headers=headers, cookies=cookies, timeout=10)
         if response.status_code == 200:
             print(f"✅ Interaction started for: {video_url}")
-            # استمر في المشاهدة لمدة 5 دقائق
-            time.sleep(300)  # 300 ثانية = 5 دقائق
+            time.sleep(300)  # استمر في المشاهدة لمدة 5 دقائق
             print(f"✅ Interaction completed for: {video_url}")
             return True
         else:
@@ -117,8 +116,10 @@ def webhook():
 
     if text.startswith("/start"):
         welcome_message = (
-            "👋 *Welcome!*\n\n"
-            "To simulate views on a video, send the video URL and desired view count in the format:\n"
+            "👋 *Welcome!*
+\n"
+            "To simulate views on a video, send the video URL and desired view count in the format:
+"
             "<video_url> <view_count>\n\n"
             "📌 Example:\nhttps://www.youtube.com/watch?v=example 100"
         )

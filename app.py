@@ -1,5 +1,3 @@
-# path: webhook_service.py
-
 import os
 import re
 import time
@@ -78,7 +76,10 @@ def simulate_interaction(video_url, headers, cookies):
     try:
         response = requests.get(video_url, headers=headers, cookies=cookies, timeout=10)
         if response.status_code == 200:
-            print(f"✅ Interaction successful for: {video_url}")
+            print(f"✅ Interaction started for: {video_url}")
+            # استمر في المشاهدة لمدة 5 دقائق
+            time.sleep(300)  # 300 ثانية = 5 دقائق
+            print(f"✅ Interaction completed for: {video_url}")
             return True
         else:
             print(f"❌ Failed interaction. Status code: {response.status_code}")
@@ -118,8 +119,8 @@ def webhook():
         welcome_message = (
             "👋 *Welcome!*\n\n"
             "To simulate views on a video, send the video URL and desired view count in the format:\n"
-            "`<video_url> <view_count>`\n\n"
-            "📌 Example:\n`https://www.youtube.com/watch?v=example 100`"
+            "<video_url> <view_count>\n\n"
+            "📌 Example:\nhttps://www.youtube.com/watch?v=example 100"
         )
         send_message(chat_id, welcome_message)
     elif re.match(r"(https?://)?(www\.)?(youtube\.com/watch\?v=|youtu\.be/)[\w-]+", text):

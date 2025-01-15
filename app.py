@@ -116,13 +116,12 @@ def webhook():
 
     if text.startswith("/start"):
         welcome_message = (
-            "👋 *Welcome!*
-\n"
-            "To simulate views on a video, send the video URL and desired view count in the format:
-"
-            "<video_url> <view_count>\n\n"
-            "📌 Example:\nhttps://www.youtube.com/watch?v=example 100"
-        )
+    "👋 *Welcome!*\n\n"
+    "To simulate views on a video, send the video URL and desired view count in the format:\n"
+    "<video_url> <view_count>\n\n"
+    "📌 Example:\nhttps://www.youtube.com/watch?v=example 100"
+)
+
         send_message(chat_id, welcome_message)
     elif re.match(r"(https?://)?(www\.)?(youtube\.com/watch\?v=|youtu\.be/)[\w-]+", text):
         try:

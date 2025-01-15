@@ -4,22 +4,19 @@ import requests
 from flask import Flask, request
 from threading import Thread
 from selenium import webdriver
-from selenium.webdriver.common.by import By
 from selenium.webdriver.chrome.service import Service
 from selenium.webdriver.chrome.options import Options
 
 # تعيين القيم من متغيرات البيئة
-API_TOKEN = os.getenv("API_TOKEN")  # توكن البوت من متغير البيئة
-WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # رابط الويب هوك (HTTPS مطلوب)
+API_TOKEN = os.getenv("API_TOKEN")  # يجب وضع توكن البوت في متغير البيئة
+WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # رابط الويب هوك العام (HTTPS مطلوب)
 PORT = int(os.getenv("PORT", 5000))  # المنفذ الافتراضي 5000
 
-# التأكد من وجود API_TOKEN و WEBHOOK_URL
 if not API_TOKEN or not WEBHOOK_URL:
     raise ValueError("يجب تحديد API_TOKEN و WEBHOOK_URL في متغيرات البيئة.")
 
 app = Flask(__name__)
 
-# قائمة لتسجيل الحسابات
 accounts = {}
 
 def set_webhook():
@@ -46,27 +43,28 @@ def send_message(chat_id, text):
 def interact_with_video_selenium(video_url, actions_count):
     """محاكاة التفاعل باستخدام Selenium."""
     try:
-        # إعداد الخيارات لتشغيل Chrome في بيئة خادم
+        # إعداد Selenium مع Chrome
         chrome_options = Options()
-        chrome_options.add_argument("--headless")  # تشغيل بدون واجهة رسومية
-        chrome_options.add_argument("--no-sandbox")  # مطلوب في البيئات السحابية
-        chrome_options.add_argument("--disable-dev-shm-usage")  # تقليل استهلاك الذاكرة
-        chrome_options.add_argument("--disable-gpu")  # تعطيل تسريع الرسومات
-        chrome_options.add_argument("--window-size=1920,1080")  # حجم النافذة الافتراضية
-
+        chrome_options.add_argument("--headless")
+        chrome_options.add_argument("--no-sandbox")
+        chrome_options.add_argument("--disable-dev-shm-usage")
+        chrome_options.add_argument("--disable-gpu")
+        
         # تحديد مسار ChromeDriver
-        driver = webdriver.Chrome(service=Service("/usr/bin/chromedriver"), options=chrome_options)
+        chrome_service = Service("/usr/bin/chromedriver")
 
-        # فتح رابط الفيديو
+        # تشغيل المتصفح
+        driver = webdriver.Chrome(service=chrome_service, options=chrome_options)
+        print(f"✅ تم فتح المتصفح للتفاعل مع {video_url}")
+
         driver.get(video_url)
         time.sleep(5)  # انتظار تحميل الصفحة
 
-        # محاكاة المشاهدات
         for i in range(actions_count):
-            time.sleep(10)  # وقت المشاهدة لكل فيديو
             print(f"✅ مشاهدة الفيديو ({i + 1}/{actions_count}) لمدة 10 ثوانٍ.")
-        
-        driver.quit()  # إغلاق المتصفح
+            time.sleep(10)  # محاكاة المشاهدة
+
+        driver.quit()
         print("✅ تم الانتهاء من التفاعل.")
     except Exception as e:
         print(f"❌ خطأ أثناء التفاعل: {e}")
@@ -82,37 +80,24 @@ def webhook():
     text = data["message"].get("text", "").strip()
 
     if text.startswith("/start"):
-        send_message(chat_id, "مرحبًا! أرسل رابط الفيديو القصير وعدد التفاعلات المطلوبة بصيغة:\n`رابط_الفيديو عدد_التفاعلات`\nمثال:\n`https://www.tiktok.com/@user/video/12345 100`")
-    elif "tiktok.com" in text or "instagram.com" in text:
+        send_message(chat_id, "مرحبًا! أرسل رابط الفيديو القصير وعدد التفاعلات المطلوبة.")
+    elif "instagram.com" in text or "tiktok.com" in text:
         try:
-            # تقسيم النص للتحقق من الصيغة
-            parts = text.split(maxsplit=1)
-            if len(parts) != 2:
-                raise ValueError("صيغة غير صحيحة! تأكد من إرسال الرابط مع عدد التفاعلات.")
-
-            video_url, actions_count = parts
+            video_url, actions_count = text.split(maxsplit=1)
             actions_count = int(actions_count)
-            if actions_count <= 0:
-                raise ValueError("عدد التفاعلات يجب أن يكون رقمًا صحيحًا أكبر من 0.")
-
-            # إضافة الحساب إلى القائمة
-            account_id = str(len(accounts) + 1)
+            account_id = len(accounts) + 1
             accounts[account_id] = {"video_url": video_url, "actions_count": actions_count}
 
-            send_message(chat_id, f"✅ تم إنشاء حساب جديد للتفاعل:\n📄 معرّف الحساب: `{account_id}`\n🎥 الفيديو: {video_url}\n📈 العدد المطلوب: {actions_count}")
-
-            # تشغيل عملية التفاعل في Thread لتجنب تعليق الخادم
+            send_message(chat_id, f"✅ تم إنشاء حساب جديد للتفاعل:\n📄 معرّف الحساب: {account_id}\n🎥 الفيديو: {video_url}\n📈 العدد المطلوب: {actions_count}")
             Thread(target=interact_with_video_selenium, args=(video_url, actions_count)).start()
-        except ValueError as ve:
-            send_message(chat_id, f"❌ خطأ في الصيغة: {ve}")
         except Exception as e:
-            send_message(chat_id, f"❌ حدث خطأ: {e}")
+            send_message(chat_id, f"❌ خطأ: {e}")
     else:
-        send_message(chat_id, "❌ صيغة غير صحيحة! أرسل رابط الفيديو وعدد التفاعلات المطلوبة.")
+        send_message(chat_id, "❌ صيغة غير صحيحة!")
 
     return "OK", 200
 
 if __name__ == "__main__":
     print(f"✅ بدء تشغيل التطبيق على المنفذ {PORT}...")
-    set_webhook()  # إعداد Webhook عند بدء التشغيل
+    set_webhook()
     app.run(host="0.0.0.0", port=PORT)

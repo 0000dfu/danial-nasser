@@ -8,7 +8,6 @@ RUN apt-get update && apt-get install -y \
     xvfb \
     libxi6 \
     libgconf-2-4 \
-    default-jdk \
     libnss3 \
     libasound2 \
     fonts-liberation \
@@ -16,19 +15,15 @@ RUN apt-get update && apt-get install -y \
     xdg-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# إضافة مفتاح Google Chrome يدويًا
-RUN wget -q -O /usr/share/keyrings/google-chrome-keyring.gpg https://dl.google.com/linux/linux_signing_key.pub
+# إعداد مستودع Google Chrome
+RUN wget -q -O /usr/share/keyrings/google-chrome-keyring.gpg https://dl.google.com/linux/linux_signing_key.pub && \
+    echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome-keyring.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list && \
+    apt-get update && apt-get install -y google-chrome-stable
 
-# إضافة مستودع Google Chrome
-RUN echo "deb [arch=amd64 signed-by=/usr/share/keyrings/google-chrome-keyring.gpg] http://dl.google.com/linux/chrome/deb/ stable main" > /etc/apt/sources.list.d/google-chrome.list
-
-# تثبيت Google Chrome
-RUN apt-get update && apt-get install -y google-chrome-stable
-
-# تثبيت Chromedriver
-RUN wget -O /tmp/chromedriver.zip https://chromedriver.storage.googleapis.com/114.0.5735.90/chromedriver_linux64.zip \
-    && unzip /tmp/chromedriver.zip -d /usr/bin/ \
-    && rm /tmp/chromedriver.zip
+# تثبيت ChromeDriver
+RUN wget -O /tmp/chromedriver.zip https://chromedriver.storage.googleapis.com/114.0.5735.90/chromedriver_linux64.zip && \
+    unzip /tmp/chromedriver.zip -d /usr/bin/ && \
+    rm /tmp/chromedriver.zip
 
 # نسخ الملفات
 WORKDIR /app

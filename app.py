@@ -4,7 +4,7 @@ import time
 import requests
 from flask import Flask, request
 from threading import Thread
-from random import uniform, choice
+from random import uniform, choice, randint
 import http.cookiejar as cookiejar
 
 # قائمة الـ User-Agent لمحاكاة التصفح
@@ -47,29 +47,48 @@ def send_message(chat_id, text):
     except requests.exceptions.RequestException as e:
         print(f"❌ Error sending message: {e}")
 
-def save_cookies_per_view(url, view_id):
-    """حفظ الكوكيز لكل مشاهدة بشكل مستقل."""
-    cookie_file = f"cookies_view_{view_id}.txt"
-    session = requests.Session()
-    session.cookies = cookiejar.LWPCookieJar(cookie_file)
-    try:
-        session.get(url, timeout=10)
-        session.cookies.save(ignore_discard=True)
-        print(f"✅ Cookies saved for view {view_id} in {cookie_file}")
-        return cookie_file
-    except Exception as e:
-        print(f"❌ Failed to save cookies for view {view_id}: {e}")
-        return None
-
-def load_cookies(cookie_file):
-    """تحميل الكوكيز من ملف."""
-    jar = cookiejar.LWPCookieJar()
-    try:
-        jar.load(cookie_file, ignore_discard=True)
-        print(f"✅ Cookies loaded from {cookie_file}")
-    except Exception as e:
-        print(f"❌ Failed to load cookies from {cookie_file}: {e}")
-    return jar
+def create_fake_cookies():
+    """إنشاء بيانات كوكيز وهمية لمحاكاة السلوك الطبيعي."""
+    cookies = cookiejar.LWPCookieJar()
+    cookies.set_cookie(cookiejar.Cookie(
+        version=0,
+        name="CONSENT",
+        value="YES+cb.20220310-17-p0.en+FX+678",
+        port=None,
+        port_specified=False,
+        domain=".youtube.com",
+        domain_specified=True,
+        domain_initial_dot=True,
+        path="/",
+        path_specified=True,
+        secure=True,
+        expires=int(time.time()) + 3600,
+        discard=False,
+        comment=None,
+        comment_url=None,
+        rest={"HttpOnly": None},
+        rfc2109=False
+    ))
+    cookies.set_cookie(cookiejar.Cookie(
+        version=0,
+        name="VISITOR_INFO1_LIVE",
+        value="random_value_" + str(randint(100000, 999999)),
+        port=None,
+        port_specified=False,
+        domain=".youtube.com",
+        domain_specified=True,
+        domain_initial_dot=True,
+        path="/",
+        path_specified=True,
+        secure=True,
+        expires=int(time.time()) + 3600,
+        discard=False,
+        comment=None,
+        comment_url=None,
+        rest={"HttpOnly": None},
+        rfc2109=False
+    ))
+    return cookies
 
 def simulate_interaction(video_url, headers, cookies):
     """محاكاة طلب إلى YouTube باستخدام الكوكيز."""
@@ -77,7 +96,7 @@ def simulate_interaction(video_url, headers, cookies):
         response = requests.get(video_url, headers=headers, cookies=cookies, timeout=10)
         if response.status_code == 200:
             print(f"✅ Interaction started for: {video_url}")
-            time.sleep(300)  # استمر في المشاهدة لمدة 5 دقائق
+            time.sleep(uniform(10, 60))  # تأخير عشوائي لمحاكاة مشاهدة طبيعية
             print(f"✅ Interaction completed for: {video_url}")
             return True
         else:
@@ -88,21 +107,17 @@ def simulate_interaction(video_url, headers, cookies):
         return False
 
 def increase_views(video_url, views_count, chat_id):
-    """محاكاة زيادة المشاهدات باستخدام كوكيز لكل مشاهدة."""
+    """محاكاة زيادة المشاهدات باستخدام كوكيز وهمية."""
     for i in range(views_count):
         view_id = i + 1
         headers = {"User-Agent": choice(USER_AGENTS)}
-        cookie_file = save_cookies_per_view("https://www.youtube.com", view_id)
-        if not cookie_file:
-            send_message(chat_id, f"❌ Failed to create cookies for view {view_id}.")
-            continue
-        cookies = load_cookies(cookie_file)
+        cookies = create_fake_cookies()
         success = simulate_interaction(video_url, headers, cookies)
         if success:
             send_message(chat_id, f"✅ View {view_id}/{views_count} simulated successfully! 🎥")
         else:
             send_message(chat_id, f"❌ Failed to simulate view {view_id}.")
-        time.sleep(uniform(5, 10))  # تأخير عشوائي بين الطلبات
+        time.sleep(uniform(5, 15))  # تأخير عشوائي بين الطلبات
 
 @app.route(f"/{API_TOKEN}", methods=["POST"])
 def webhook():
@@ -116,12 +131,11 @@ def webhook():
 
     if text.startswith("/start"):
         welcome_message = (
-    "👋 *Welcome!*\n\n"
-    "To simulate views on a video, send the video URL and desired view count in the format:\n"
-    "<video_url> <view_count>\n\n"
-    "📌 Example:\nhttps://www.youtube.com/watch?v=example 100"
-)
-
+            "👋 *Welcome!*\n\n"
+            "To simulate views on a video, send the video URL and desired view count in the format:\n"
+            "<video_url> <view_count>\n\n"
+            "📌 Example:\nhttps://www.youtube.com/watch?v=example 100"
+        )
         send_message(chat_id, welcome_message)
     elif re.match(r"(https?://)?(www\.)?(youtube\.com/watch\?v=|youtu\.be/)[\w-]+", text):
         try:

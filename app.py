@@ -1,6 +1,7 @@
 import os
 import re
 import time
+import uuid
 import requests
 from flask import Flask, request
 from threading import Thread
@@ -15,6 +16,9 @@ if not API_TOKEN or not WEBHOOK_URL:
     raise ValueError("يجب تحديد API_TOKEN و WEBHOOK_URL في متغيرات البيئة.")
 
 app = Flask(__name__)
+
+# قائمة لتسجيل الحسابات
+accounts = {}
 
 def set_webhook():
     """إعداد Webhook للبوت على Telegram."""
@@ -37,28 +41,16 @@ def send_message(chat_id, text):
     except requests.exceptions.RequestException as e:
         print(f"❌ فشل في إرسال الرسالة: {e}")
 
-# محاكاة التفاعل مع الفيديو القصير
-def interact_with_short_video(platform, video_url, actions_count):
-    """محاكاة التفاعل مع مقاطع الفيديو القصيرة مثل ريلز أو تيك توك."""
-    if platform == "tiktok":
-        # محاكاة التفاعل مع TikTok
+def interact_with_video(account_id, platform, video_url, actions_count):
+    """محاكاة التفاعل مع مقاطع الفيديو القصيرة."""
+    try:
         for i in range(actions_count):
-            try:
-                print(f"✅ محاكاة التفاعل مع الفيديو على TikTok ({i + 1}/{actions_count})")
-                # إضافة منطق التفاعل مع TikTok مثل الإعجاب أو التعليق
-                time.sleep(8)  # الانتظار لمدة 8 ثواني لمحاكاة مدة مشاهدة الفيديو
-            except Exception as e:
-                print(f"❌ خطأ أثناء التفاعل مع الفيديو: {e}")
-    elif platform == "instagram_reels":
-        # محاكاة التفاعل مع Instagram Reels
-        for i in range(actions_count):
-            try:
-                print(f"✅ محاكاة التفاعل مع الفيديو على Instagram Reels ({i + 1}/{actions_count})")
-                # إضافة منطق التفاعل مع Reels مثل الإعجاب أو التعليق
-                time.sleep(8)  # الانتظار لمدة 8 ثواني لمحاكاة مدة مشاهدة الفيديو
-            except Exception as e:
-                print(f"❌ خطأ أثناء التفاعل مع الفيديو: {e}")
-
+            watch_time = 10 + (i % 5)  # مدة مشاهدة متغيرة لمحاكاة الوقت الحقيقي
+            print(f"✅ الحساب {account_id}: مشاهدة الفيديو {video_url} ({i + 1}/{actions_count}) لمدة {watch_time} ثانية.")
+            time.sleep(watch_time)
+        print(f"✅ الحساب {account_id}: تم الانتهاء من التفاعل.")
+    except Exception as e:
+        print(f"❌ الحساب {account_id}: خطأ أثناء التفاعل: {e}")
 
 @app.route(f"/{API_TOKEN}", methods=["POST"])
 def webhook():
@@ -87,10 +79,14 @@ def webhook():
             if actions_count <= 0:
                 raise ValueError("عدد التفاعلات يجب أن يكون رقمًا صحيحًا أكبر من 0.")
 
-            send_message(chat_id, f"✅ تم بدء التفاعل مع الفيديو:\n{video_url}\n📈 العدد المطلوب: {actions_count}")
+            # إنشاء حساب جديد
+            account_id = str(uuid.uuid4())
+            accounts[account_id] = {"video_url": video_url, "actions_count": actions_count}
+
+            send_message(chat_id, f"✅ تم إنشاء حساب جديد للتفاعل:\n📄 معرّف الحساب: `{account_id}`\n🎥 الفيديو: {video_url}\n📈 العدد المطلوب: {actions_count}")
 
             # تشغيل عملية التفاعل في Thread لتجنب تعليق الخادم
-            Thread(target=interact_with_short_video, args=("tiktok", video_url, actions_count)).start()
+            Thread(target=interact_with_video, args=(account_id, "tiktok", video_url, actions_count)).start()
         except ValueError as ve:
             send_message(chat_id, f"❌ خطأ في الصيغة: {ve}")
         except Exception as e:

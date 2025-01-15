@@ -4,6 +4,8 @@ import pyttsx3
 from flask import Flask, request, jsonify
 from tempfile import NamedTemporaryFile
 
+os.system('pip install pyttsx3')
+
 # إعداد القيم من متغيرات البيئة
 API_TOKEN = os.getenv("API_TOKEN")  # توكن البوت
 WEBHOOK_URL = os.getenv("WEBHOOK_URL")  # رابط الويب هوك
